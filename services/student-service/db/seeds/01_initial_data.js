@@ -29,7 +29,7 @@ export async function seed(knex) {
   }));
 
   await knex.transaction(async (trx) => {
-    await trx("students").del();
+await trx.raw('TRUNCATE TABLE students RESTART IDENTITY CASCADE');
 
     const insertedStudents = await trx("students")
       .insert(studentRows)

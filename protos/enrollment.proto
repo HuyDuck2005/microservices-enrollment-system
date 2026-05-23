@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package enrollment;
+
+service EnrollmentService {
+  rpc CreateEnrollment (CreateEnrollmentRequest) returns (EnrollmentResponse);
+}
+
+message CreateEnrollmentRequest {
+  string student_id = 1;
+  string course_id = 2;
+}
+
+message EnrollmentResponse {
+  string id = 1;
+  string student_id = 2;
+  string course_id = 3;
+  string status = 4;
+}

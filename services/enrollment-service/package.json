@@ -1,25 +1,26 @@
 {
-  "name": "student-service",
+  "name": "enrollment-service",
   "version": "1.0.0",
-  "description": "",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
+  "main": "index.js",
+"scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
     "migrate": "knex migrate:latest",
+    "rollback": "knex migrate:rollback",
     "seed": "knex seed:run",
-    "rollback": "knex migrate:rollback"
+    "start": "node src/server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "description": "",
   "type": "module",
   "dependencies": {
-    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/grpc-js": "^1.14.4",
     "@grpc/proto-loader": "^0.8.1",
-    "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "knex": "^3.2.10",
-    "pg": "^8.20.0"
+    "opossum": "^9.0.0",
+    "pg": "^8.21.0"
   }
 }
