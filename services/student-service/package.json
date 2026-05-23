@@ -2,10 +2,11 @@
   "name": "student-service",
   "version": "1.0.0",
   "description": "",
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node src/server.js",
     "migrate": "knex migrate:latest",
+    "dev": "nodemon src/server.js",
     "seed": "knex seed:run",
     "rollback": "knex migrate:rollback"
   },

@@ -3,11 +3,18 @@ syntax = "proto3";
 package course;
 
 service CourseService {
-  rpc GetCourse (GetCourseRequest) returns (Course);
+  rpc getCourse (GetCourseRequest) returns (CourseResponse);
+  rpc listCourses (ListCoursesRequest) returns (ListCoursesResponse);
+  rpc applyEnrollmentConfirmed (ApplyEnrollmentConfirmedRequest) returns (ApplyEnrollmentConfirmedResponse);
 }
 
 message GetCourseRequest {
   string id = 1;
+}
+
+message ListCoursesRequest {
+  int32 limit = 1;
+  int32 offset = 2;
 }
 
 message Course {
@@ -19,4 +26,34 @@ message Course {
   int32 capacity = 6;
   string created_at = 7;
   string updated_at = 8;
+}
+
+message CourseResponse {
+  Course course = 1;
+}
+
+message ListCoursesResponse {
+  repeated Course courses = 1;
+  PageInfo page_info = 2;
+}
+
+message PageInfo {
+  int32 total = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  bool has_next_page = 4;
+  bool has_previous_page = 5;
+}
+
+message ApplyEnrollmentConfirmedRequest {
+  string event_id = 1;
+  string enrollment_id = 2;
+  string student_id = 3;
+  int32 course_id = 4;
+}
+
+message ApplyEnrollmentConfirmedResponse {
+  bool success = 1;
+  bool already_processed = 2;
+  Course course = 3;
 }

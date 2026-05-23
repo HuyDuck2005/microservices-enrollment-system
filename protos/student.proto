@@ -3,11 +3,11 @@ syntax = "proto3";
 package student;
 
 service StudentService {
-    rpc GetStudent(GetStudentRequest) returns (StudentResponse);
-    rpc CreateStudent(CreateStudentRequest) returns (StudentResponse);
-    rpc AuthenticateStudent(AuthenticateStudentRequest) returns (AuthenticateStudentResponse);
-    rpc ListStudents(ListStudentsRequest) returns (ListStudentsResponse);
-    rpc BatchGetStudents(BatchGetStudentsRequest) returns (BatchGetStudentsResponse);
+    rpc getStudent(GetStudentRequest) returns (StudentResponse);
+    rpc createStudent(CreateStudentRequest) returns (StudentResponse);
+    rpc authenticateStudent(AuthenticateStudentRequest) returns (AuthenticateStudentResponse);
+    rpc listStudents(ListStudentsRequest) returns (ListStudentsResponse);
+    rpc batchGetStudents(BatchGetStudentsRequest) returns (BatchGetStudentsResponse);
 }
 
 message Student {
