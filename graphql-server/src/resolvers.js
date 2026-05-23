@@ -84,11 +84,12 @@ export const resolvers = {
         student_id: studentId,
         course_id: Number(courseId)
       });
+      const enrollment = response.enrollment;
       return {
-        id: response.id,
-        studentId: response.student_id,
-        courseId: String(response.course_id),
-        status: response.status
+        id: String(enrollment.id),
+        studentId: String(enrollment.student_id),
+        courseId: String(enrollment.course_id),
+        status: enrollment.status
       };
     },
 
@@ -101,12 +102,12 @@ export const resolvers = {
         student_id: currentStudentId,
         course_id: Number(courseId)
       });
-
+      const enrollment = response.enrollment;
       return {
-        id: response.id,
-        studentId: response.student_id,
-        courseId: String(response.course_id),
-        status: response.status
+        id: String(enrollment.id),
+        studentId: String(enrollment.student_id),
+        courseId: String(enrollment.course_id),
+        status: enrollment.status
       };
     }
   },

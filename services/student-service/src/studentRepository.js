@@ -10,7 +10,7 @@ export function createStudentRepository(db) {
 
     async findById(id) {
       return db(TABLE_NAME)
-        .select("id", "name", "email")
+        .select("id", "name", "email", "status")
         .where({ id })
         .first();
     },

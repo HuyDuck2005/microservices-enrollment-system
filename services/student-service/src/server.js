@@ -45,7 +45,6 @@ grpcServer.bindAsync(
     }
 
     console.log(`student-service gRPC listening on ${grpcAddress}`);
-    grpcServer.start();
   }
 );
 

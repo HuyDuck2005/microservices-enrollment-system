@@ -1,52 +1,46 @@
-import grpc from '@grpc/grpc-js';
+﻿import CircuitBreaker from "opossum";
+import { studentClient, courseClient, callUnary } from "./grpcClients.js";
 
-export function createCircuitBreakerClient(client, options = {}) {
-  const {
-    timeoutMs = 5000,
-    failureThreshold = 5,
-    resetTimeoutMs = 15000
-  } = options;
+const studentBreaker = new CircuitBreaker(
+  (request) => callUnary(studentClient, "getStudent", request, 1200),
+  {
+    timeout: 1500,
+    errorThresholdPercentage: 50,
+    resetTimeout: 5000
+  }
+);
 
-  const state = new Map();
+const courseBreaker = new CircuitBreaker(
+  (request) => callUnary(courseClient, "getCourse", request, 1200),
+  {
+    timeout: 1500,
+    errorThresholdPercentage: 50,
+    resetTimeout: 5000
+  }
+);
 
-  const getState = (method) => {
-    if (!state.has(method)) {
-      state.set(method, {
-        failureCount: 0,
-        openUntil: 0
-      });
-    }
-    return state.get(method);
-  };
+studentBreaker.fallback(() => {
+  const error = new Error("Student service unavailable");
+  error.code = "UNAVAILABLE";
+  throw error;
+});
 
-  const callMethod = (methodName, request) => {
-    const methodState = getState(methodName);
+courseBreaker.fallback(() => {
+  const error = new Error("Course service unavailable");
+  error.code = "UNAVAILABLE";
+  throw error;
+});
 
-    if (Date.now() < methodState.openUntil) {
-      return Promise.reject(new Error(`${methodName} circuit breaker is open`));
-    }
+export const studentGateway = {
+  async getStudent(id) {
+    const response = await studentBreaker.fire({ id });
+    return response.student;
+  }
+};
 
-    return new Promise((resolve, reject) => {
-      const deadline = Date.now() + timeoutMs;
-      client[methodName](request, { deadline }, (error, response) => {
-        if (error) {
-          methodState.failureCount += 1;
-          if (methodState.failureCount >= failureThreshold) {
-            methodState.openUntil = Date.now() + resetTimeoutMs;
-          }
-          reject(error);
-          return;
-        }
-
-        methodState.failureCount = 0;
-        resolve(response);
-      });
-    });
-  };
-
-  return new Proxy({}, {
-    get(_, methodName) {
-      return (request) => callMethod(methodName, request);
-    }
-  });
-}
+export const courseGateway = {
+  async getCourse(id) {
+    const response = await courseBreaker.fire({ id });
+    return response.course;
+  }
+};
