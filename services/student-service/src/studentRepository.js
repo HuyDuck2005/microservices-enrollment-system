@@ -24,7 +24,7 @@ export function createStudentRepository(db) {
 
     async findAll({ limit, offset }) {
       return db(TABLE_NAME)
-        .select("id", "name", "email")
+        .select("id", "name", "email", "status")
         .orderBy("created_at", "desc")
         .limit(limit)
         .offset(offset);

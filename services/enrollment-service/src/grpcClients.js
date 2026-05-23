@@ -1,54 +1,41 @@
-import grpc from '@grpc/grpc-js';
-import protoLoader from '@grpc/proto-loader';
+import 'dotenv/config';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createCircuitBreakerClient } from './circuitBreakers.js';
+import grpc from '@grpc/grpc-js';
+import protoLoader from '@grpc/proto-loader';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROTOS_DIR = path.resolve(__dirname, '../../../protos');
 
-const studentProtoPath = path.resolve(PROTOS_DIR, 'student.proto');
-const courseProtoPath = path.resolve(PROTOS_DIR, 'course.proto');
+function loadProto(relativePath, packageName, serviceName, address) {
+  const protoPath = path.resolve(__dirname, '../../../protos', relativePath);
+  const packageDefinition = protoLoader.loadSync(protoPath, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true
+  });
+  const loaded = grpc.loadPackageDefinition(packageDefinition);
+  return new loaded[packageName][serviceName](address, grpc.credentials.createInsecure());
+}
 
-const loadOptions = {
-  keepCase: true,
-  longs: String,
-  enums: String,
-  defaults: true,
-  oneofs: true
-};
-
-const studentDefinition = protoLoader.loadSync(studentProtoPath, loadOptions);
-const courseDefinition = protoLoader.loadSync(courseProtoPath, loadOptions);
-
-const studentProto = grpc.loadPackageDefinition(studentDefinition).student;
-const courseProto = grpc.loadPackageDefinition(courseDefinition).course;
-
-const studentAddress = process.env.STUDENT_SERVICE_ADDR || process.env.STUDENT_GRPC_URL || 'localhost:50051';
-const courseAddress = process.env.COURSE_SERVICE_ADDR || process.env.COURSE_GRPC_URL || 'localhost:50052';
-
-const rawStudentClient = new studentProto.StudentService(
-  studentAddress,
-  grpc.credentials.createInsecure()
+export const studentClient = loadProto(
+  'student.proto', 'student', 'StudentService',
+  process.env.STUDENT_GRPC_URL || 'localhost:50051'
 );
 
-const rawCourseClient = new courseProto.CourseService(
-  courseAddress,
-  grpc.credentials.createInsecure()
+export const courseClient = loadProto(
+  'course.proto', 'course', 'CourseService',
+  process.env.COURSE_GRPC_URL || 'localhost:50052'
 );
 
-export const studentClient = createCircuitBreakerClient(rawStudentClient, {
-  timeoutMs: 5000,
-  failureThreshold: 5,
-  resetTimeoutMs: 15000
-});
-
-export const courseClient = createCircuitBreakerClient(rawCourseClient, {
-  timeoutMs: 5000,
-  failureThreshold: 5,
-  resetTimeoutMs: 15000
-});
-
-export const getStudent = (request) => studentClient.getStudent(request);
-export const getCourse = (request) => courseClient.getCourse(request);
+export function callUnary(client, method, request, timeoutMs = 1500) {
+  return new Promise((resolve, reject) => {
+    const deadline = new Date(Date.now() + timeoutMs);
+    client[method](request, { deadline }, (error, response) => {
+      if (error) return reject(error);
+      resolve(response);
+    });
+  });
+}

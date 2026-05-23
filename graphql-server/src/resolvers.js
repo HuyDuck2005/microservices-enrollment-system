@@ -119,11 +119,11 @@ export const resolvers = {
 
   Enrollment: {
     student: async (parent) => {
-      const response = await toPromise(grpcClients.studentClient, 'getStudent', { id: parent.studentId });
+      const response = await toPromise(grpcClients.studentClient, 'getStudent', { id: String(parent.studentId) });
       return response?.student || null;
     },
     course: async (parent) => {
-      const response = await toPromise(grpcClients.courseClient, 'getCourse', { id: parent.courseId });
+      const response = await toPromise(grpcClients.courseClient, 'getCourse', { id: Number(parent.courseId) });
       return response?.course || null;
     }
   }
