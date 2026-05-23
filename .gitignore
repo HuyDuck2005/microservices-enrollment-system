@@ -1,0 +1,13 @@
+# Node modules
+node_modules/
+npm-debug.log
+
+# Môi trường
+.env
+
+# Dữ liệu Docker Database
+db_data/
+init-db/
+
+# Hệ điều hành
+.DS_Store

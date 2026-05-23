@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package student;
+
+service StudentService {
+    rpc GetStudent(GetStudentRequest) returns (StudentResponse);
+    rpc CreateStudent(CreateStudentRequest) returns (StudentResponse);
+    rpc AuthenticateStudent(AuthenticateStudentRequest) returns (AuthenticateStudentResponse);
+    rpc ListStudents(ListStudentsRequest) returns (ListStudentsResponse);
+    rpc BatchGetStudents(BatchGetStudentsRequest) returns (BatchGetStudentsResponse);
+}
+
+message Student {
+    string id = 1;
+    string name = 2;
+    string email = 3;
+}
+
+message GetStudentRequest {
+    string id = 1;
+}
+
+message StudentResponse {
+    Student student = 1;
+}
+
+message CreateStudentRequest {
+    string name = 1;
+    string email = 2;
+    string password = 3;
+}
+
+message PageInfo {
+    int32 total = 1;
+    int32 limit = 2;
+    int32 offset = 3;
+    bool has_next_page = 4;
+    bool has_previous_page = 5;
+}
+
+message AuthenticateStudentRequest {
+    string email = 1;
+    string password = 2;
+}
+
+message AuthenticateStudentResponse {
+    bool success = 1;
+    Student student = 2;
+    string message = 3;
+}
+
+message ListStudentsRequest {
+    int32 limit = 1;
+    int32 offset = 2;
+}
+
+message ListStudentsResponse {
+    repeated Student students = 1;
+    PageInfo page_info = 2;
+}
+
+message BatchGetStudentsRequest {
+    repeated string ids = 1;
+}
+
+message BatchGetStudentsResponse {
+    repeated Student students = 1;
+}
