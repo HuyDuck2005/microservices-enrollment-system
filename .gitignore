@@ -7,7 +7,6 @@ npm-debug.log
 
 # Dữ liệu Docker Database
 db_data/
-init-db/
 
 # Hệ điều hành
 .DS_Store
