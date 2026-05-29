@@ -1,28 +1,22 @@
 import grpc from "@grpc/grpc-js";
 
 function toGrpcError(error) {
+    // Log lỗi thực tế ra terminal để bạn biết chuyện gì đang xảy ra
+    console.error("gRPC Handler Error:", error); 
+
     if (error.code === "NOT_FOUND") {
-        return {
-            code: grpc.status.NOT_FOUND,
-            details: error.message
-        };
+        return { code: grpc.status.NOT_FOUND, details: error.message };
     }
     if (error.code === "INVALID_ARGUMENT") {
-        return {
-            code: grpc.status.INVALID_ARGUMENT,
-            details: error.message
-        };
+        return { code: grpc.status.INVALID_ARGUMENT, details: error.message };
     }
     if (error.code === "ALREADY_EXISTS") {
-        return {
-            code: grpc.status.ALREADY_EXISTS,
-            details: error.message
-        };
+        return { code: grpc.status.ALREADY_EXISTS, details: error.message };
     }
     
     return {
         code: grpc.status.INTERNAL,
-        details: "Internal server error"
+        details: error.message || "Internal server error"
     };
 }
 
@@ -57,6 +51,7 @@ export function createStudentGrpcHandlers(studentService) {
 
         async listStudents(call, callback) {
             try {
+                // Đảm bảo call.request có limit/offset đúng với proto
                 const result = await studentService.listStudents(call.request);
                 callback(null, result);
             } catch (error) {

@@ -13,55 +13,55 @@ import { resolvers } from "./resolvers.js";
 import { grpcClients } from "./grpcClients.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
-const PORT = Number(process.env.PORT || 4000);
+const PORT       = Number(process.env.PORT || 4000);
 
-const app = express();
+// ─── Helpers xử lý JWT ───────────────────────────────────────────────────────
+function extractToken(req) {
+  const authorization = req.headers.authorization || "";
+  if (!authorization.startsWith("Bearer ")) return null;
+  return authorization.slice("Bearer ".length);
+}
+
+function getCurrentStudentId(req) {
+  const token = extractToken(req);
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    return payload.sub || null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Express + Apollo setup ──────────────────────────────────────────────────
+const app        = express();
 const httpServer = http.createServer(app);
 
-app.get("/health", (req, res) => {
-    res.json({
-        status: "ok",
-        service: "graphql-server"
-    });
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", service: "graphql-server" });
 });
 
 const server = new ApolloServer({
-    typeDefs,
-    resolvers,
-    plugins: [ApolloServerPluginDrainHttpServer({ httpServer })]
+  typeDefs,
+  resolvers,
+  plugins: [ApolloServerPluginDrainHttpServer({ httpServer })]
 });
 
 await server.start();
 
 app.use(
-    "/graphql",
-    cors(),
-    express.json(),
-    expressMiddleware(server, {
-        context: async ({ req }) => {
-            let currentStudentId = null;
-            
-            const authHeader = req.headers.authorization || "";
-            if (authHeader.startsWith("Bearer ")) {
-                const token = authHeader.substring(7, authHeader.length);
-                try {
-                    const decoded = jwt.verify(token, JWT_SECRET);
-                    currentStudentId = decoded.sub;
-                } catch (error) {
-                    console.log("Invalid token");
-                }
-            }
-
-            return {
-                grpc: grpcClients,
-                currentStudentId
-            };
-        }
+  "/graphql",
+  cors(),
+  express.json(),
+  expressMiddleware(server, {
+    context: async ({ req }) => ({
+      // grpc clients với circuit breaker (dùng ctx.grpc.student.call(...))
+      grpc:             grpcClients,
+      currentStudentId: getCurrentStudentId(req)
     })
+  })
 );
 
-await new Promise(resolve => {
-    httpServer.listen(PORT, resolve);
-});
+await new Promise(resolve => httpServer.listen(PORT, resolve));
 
-console.log(`GraphQL Server Listening on http://localhost:${PORT}/graphql`);
+console.log(`GraphQL Server listening on http://localhost:${PORT}/graphql`);

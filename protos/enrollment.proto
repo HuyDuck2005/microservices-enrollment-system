@@ -7,16 +7,23 @@ service EnrollmentService {
   rpc listEnrollmentsByStudent (ListEnrollmentsByStudentRequest) returns (ListEnrollmentsByStudentResponse);
 }
 
-message CreateEnrollmentRequest {
-  string student_id = 1;
-  int32 course_id = 2;
+// ─── Messages ────────────────────────────────────────────────────────────────
+
+message Enrollment {
+  int32  id         = 1;
+  string student_id = 2;
+  int32  course_id  = 3;
+  string status     = 4;
 }
 
+message CreateEnrollmentRequest {
+  string student_id = 1;
+  int32  course_id  = 2;
+}
+
+// EnrollmentResponse bọc object Enrollment (nhất quán với CourseResponse)
 message EnrollmentResponse {
-  string id = 1;
-  string student_id = 2;
-  int32 course_id = 3;
-  string status = 4;
+  Enrollment enrollment = 1;
 }
 
 message ListEnrollmentsByStudentRequest {
@@ -24,5 +31,5 @@ message ListEnrollmentsByStudentRequest {
 }
 
 message ListEnrollmentsByStudentResponse {
-  repeated EnrollmentResponse enrollments = 1;
+  repeated Enrollment enrollments = 1;
 }

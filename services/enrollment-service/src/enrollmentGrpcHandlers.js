@@ -1,15 +1,16 @@
 ﻿import grpc from "@grpc/grpc-js";
 
+// Map lỗi business logic sang gRPC status code
 function toGrpcError(error) {
   const statusMap = {
-    NOT_FOUND: grpc.status.NOT_FOUND,
-    ALREADY_EXISTS: grpc.status.ALREADY_EXISTS,
+    NOT_FOUND:          grpc.status.NOT_FOUND,
+    ALREADY_EXISTS:     grpc.status.ALREADY_EXISTS,
     FAILED_PRECONDITION: grpc.status.FAILED_PRECONDITION,
-    UNAVAILABLE: grpc.status.UNAVAILABLE,
-    INVALID_ARGUMENT: grpc.status.INVALID_ARGUMENT
+    UNAVAILABLE:        grpc.status.UNAVAILABLE,
+    INVALID_ARGUMENT:   grpc.status.INVALID_ARGUMENT
   };
   return {
-    code: statusMap[error.code] || grpc.status.INTERNAL,
+    code:    statusMap[error.code] ?? grpc.status.INTERNAL,
     message: error.message || "Internal enrollment service error"
   };
 }
@@ -19,12 +20,15 @@ export function createEnrollmentGrpcHandlers(enrollmentService) {
     async createEnrollment(call, callback) {
       try {
         const enrollment = await enrollmentService.createEnrollment(call.request);
+
+        // Proto mới: EnrollmentResponse { Enrollment enrollment = 1; }
+        // Enrollment { int32 id, string student_id, int32 course_id, string status }
         callback(null, {
           enrollment: {
-            id: enrollment.id,
-            student_id: enrollment.student_id,
-            course_id: enrollment.course_id,
-            status: enrollment.status
+            id:         enrollment.id,
+            student_id: String(enrollment.student_id),
+            course_id:  enrollment.course_id,
+            status:     enrollment.status
           }
         });
       } catch (error) {
@@ -34,7 +38,16 @@ export function createEnrollmentGrpcHandlers(enrollmentService) {
 
     async listEnrollmentsByStudent(call, callback) {
       try {
-        const enrollments = await enrollmentService.listEnrollmentsByStudent(call.request);
+        const rows = await enrollmentService.listEnrollmentsByStudent(call.request);
+
+        // ListEnrollmentsByStudentResponse { repeated Enrollment enrollments = 1; }
+        const enrollments = rows.map(e => ({
+          id:         e.id,
+          student_id: String(e.student_id),
+          course_id:  e.course_id,
+          status:     e.status
+        }));
+
         callback(null, { enrollments });
       } catch (error) {
         callback(toGrpcError(error));

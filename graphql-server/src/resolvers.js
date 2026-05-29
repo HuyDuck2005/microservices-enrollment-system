@@ -1,130 +1,256 @@
-import jwt from 'jsonwebtoken';
-import { grpcClients } from './grpcClients.js';
+import jwt from "jsonwebtoken";
+import { GraphQLError } from "graphql";
+import { grpc } from "./grpcClients.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
-const toPromise = (client, method, request) => {
-  return client[method](request);
-};
+// ─── Map gRPC status → GraphQLError với extensions.code ──────────────────────
+function toGraphQLError(error, fallbackMessage = "Internal server error") {
+  if (error instanceof GraphQLError) throw error; // đừng wrap lại
 
+  const grpcToGql = {
+    [grpc.status.NOT_FOUND]:           ["NOT_FOUND",           error.details || error.message],
+    [grpc.status.ALREADY_EXISTS]:      ["ALREADY_EXISTS",      error.details || error.message],
+    [grpc.status.FAILED_PRECONDITION]: ["FAILED_PRECONDITION", error.details || error.message],
+    [grpc.status.UNAVAILABLE]:         ["UNAVAILABLE",         error.details || "Service temporarily unavailable"],
+    [grpc.status.UNAUTHENTICATED]:     ["UNAUTHENTICATED",     error.details || "Unauthenticated"],
+    [grpc.status.PERMISSION_DENIED]:   ["FORBIDDEN",           error.details || "Permission denied"],
+    [grpc.status.INVALID_ARGUMENT]:    ["BAD_USER_INPUT",      error.details || error.message]
+  };
+
+  const mapped = grpcToGql[error.code];
+  if (mapped) {
+    return new GraphQLError(mapped[1], { extensions: { code: mapped[0] } });
+  }
+
+  return new GraphQLError(fallbackMessage, { extensions: { code: "INTERNAL_SERVER_ERROR" } });
+}
+
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+function requireAuthenticated(ctx) {
+  if (!ctx.currentStudentId) {
+    throw new GraphQLError("Authentication required", {
+      extensions: { code: "UNAUTHENTICATED" }
+    });
+  }
+}
+
+// ─── Mapper helpers ───────────────────────────────────────────────────────────
+function mapStudent(student) {
+  if (!student) return null;
+  return { id: student.id, name: student.name, email: student.email, status: student.status };
+}
+
+function mapCourse(course) {
+  if (!course) return null;
+  return {
+    id:            course.id,
+    title:         course.title,
+    description:   course.description,
+    status:        course.status,
+    enrolledCount: course.enrolled_count,
+    capacity:      course.capacity
+  };
+}
+
+function mapEnrollment(enrollment) {
+  if (!enrollment) return null;
+  return {
+    id:        enrollment.id,
+    studentId: String(enrollment.student_id),
+    courseId:  String(enrollment.course_id),
+    status:    enrollment.status
+  };
+}
+
+function mapPageInfo(pi) {
+  if (!pi) return null;
+  return {
+    total:           pi.total,
+    limit:           pi.limit,
+    offset:          pi.offset,
+    hasNextPage:     pi.has_next_page,
+    hasPreviousPage: pi.has_previous_page
+  };
+}
+
+// ─── Resolvers ────────────────────────────────────────────────────────────────
 export const resolvers = {
   Query: {
-    me: async (_, __, { currentStudentId }) => {
-      if (!currentStudentId) return null;
-      const response = await toPromise(grpcClients.studentClient, 'getStudent', { id: currentStudentId });
-      return response?.student || null;
+    // Trả về student của token hiện tại
+    async me(_, _args, ctx) {
+      if (!ctx.currentStudentId) return null;
+      try {
+        const res = await ctx.grpc.student.call("getStudent", { id: ctx.currentStudentId });
+        return mapStudent(res.student);
+      } catch {
+        return null;
+      }
     },
 
-    student: async (_, { id }) => {
-      const response = await toPromise(grpcClients.studentClient, 'getStudent', { id });
-      return response?.student || null;
+    async student(_, { id }, ctx) {
+      try {
+        const res = await ctx.grpc.student.call("getStudent", { id });
+        return mapStudent(res.student);
+      } catch (error) {
+        if (error.code === grpc.status.NOT_FOUND) return null;
+        throw toGraphQLError(error, "Cannot load student");
+      }
     },
 
-    students: async (_, { limit, offset }) => {
-      const response = await toPromise(grpcClients.studentClient, 'listStudents', { limit, offset });
-      return response?.students || [];
+    async students(_, { limit = 20, offset = 0 }, ctx) {
+      try {
+        const res = await ctx.grpc.student.call("listStudents", { limit, offset });
+        return (res.students || []).map(mapStudent);
+      } catch (error) {
+        throw toGraphQLError(error, "Cannot load students");
+      }
     },
 
-    studentsPage: async (_, { limit, offset }) => {
-      const response = await toPromise(grpcClients.studentClient, 'listStudents', { limit, offset });
-      return {
-        students: response?.students || [],
-        pageInfo: response?.page_info || null
-      };
+    async studentsPage(_, { limit = 20, offset = 0 }, ctx) {
+      try {
+        const res = await ctx.grpc.student.call("listStudents", { limit, offset });
+        return {
+          students: (res.students || []).map(mapStudent),
+          pageInfo: mapPageInfo(res.page_info)
+        };
+      } catch (error) {
+        throw toGraphQLError(error, "Cannot load students page");
+      }
     },
 
-    course: async (_, { id }) => {
-      const response = await toPromise(grpcClients.courseClient, 'getCourse', { id });
-      return response?.course || null;
+    async course(_, { id }, ctx) {
+      try {
+        const res = await ctx.grpc.course.call("getCourse", { id: Number(id) });
+        return mapCourse(res.course);
+      } catch (error) {
+        if (error.code === grpc.status.NOT_FOUND) return null;
+        throw toGraphQLError(error, "Cannot load course");
+      }
     },
 
-    courses: async (_, { limit, offset }) => {
-      const response = await toPromise(grpcClients.courseClient, 'listCourses', { limit, offset });
-      return {
-        courses: response?.courses || [],
-        pageInfo: response?.page_info || null
-      };
+    async courses(_, { limit = 20, offset = 0 }, ctx) {
+      try {
+        const res = await ctx.grpc.course.call("listCourses", { limit, offset });
+        return {
+          courses:  (res.courses || []).map(mapCourse),
+          pageInfo: mapPageInfo(res.page_info)
+        };
+      } catch (error) {
+        throw toGraphQLError(error, "Cannot load courses");
+      }
     },
 
-    enrollmentsByStudent: async (_, { studentId }) => {
-      const response = await toPromise(grpcClients.enrollmentClient, 'listEnrollmentsByStudent', { student_id: studentId });
-      return response?.enrollments || [];
+    async enrollmentsByStudent(_, { studentId }, ctx) {
+      try {
+        const res = await ctx.grpc.enrollment.call("listEnrollmentsByStudent", {
+          student_id: studentId
+        });
+        return (res.enrollments || []).map(mapEnrollment);
+      } catch (error) {
+        throw toGraphQLError(error, "Cannot load enrollments");
+      }
     },
 
-    myEnrollments: async (_, __, { currentStudentId }) => {
-      if (!currentStudentId) return [];
-      const response = await toPromise(grpcClients.enrollmentClient, 'listEnrollmentsByStudent', { student_id: currentStudentId });
-      return response?.enrollments || [];
+    async myEnrollments(_, _args, ctx) {
+      requireAuthenticated(ctx);
+      try {
+        const res = await ctx.grpc.enrollment.call("listEnrollmentsByStudent", {
+          student_id: ctx.currentStudentId
+        });
+        return (res.enrollments || []).map(mapEnrollment);
+      } catch (error) {
+        throw toGraphQLError(error, "Cannot load my enrollments");
+      }
     }
   },
 
   Mutation: {
-    login: async (_, { email, password }) => {
-      const response = await toPromise(grpcClients.studentClient, 'authenticateStudent', { email, password });
+    async login(_, { email, password }, ctx) {
+      try {
+        const res = await ctx.grpc.student.call("authenticateStudent", { email, password });
 
-      if (!response?.success) {
-        throw new Error(response?.message || 'Invalid credentials');
+        if (!res.success || !res.student) {
+          throw new GraphQLError("Invalid email or password", {
+            extensions: { code: "UNAUTHENTICATED" }
+          });
+        }
+
+        const token = jwt.sign(
+          { sub: res.student.id, email: res.student.email },
+          JWT_SECRET,
+          { expiresIn: "2h" }
+        );
+
+        return { token, student: mapStudent(res.student) };
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        throw toGraphQLError(error, "Cannot login");
       }
-
-      const token = jwt.sign({ sub: response.student.id }, JWT_SECRET, { expiresIn: '1h' });
-      return {
-        token,
-        student: response.student
-      };
     },
 
-    createStudent: async (_, { input }) => {
-      const response = await toPromise(grpcClients.studentClient, 'createStudent', input);
-      return response?.student || null;
-    },
-
-    createEnrollment: async (_, { input }) => {
-      const { studentId, courseId } = input;
-      const response = await toPromise(grpcClients.enrollmentClient, 'createEnrollment', {
-        student_id: studentId,
-        course_id: Number(courseId)
-      });
-      const enrollment = response.enrollment;
-      return {
-        id: String(enrollment.id),
-        studentId: String(enrollment.student_id),
-        courseId: String(enrollment.course_id),
-        status: enrollment.status
-      };
-    },
-
-    createMyEnrollment: async (_, { courseId }, { currentStudentId }) => {
-      if (!currentStudentId) {
-        throw new Error('Authentication required');
+    async createStudent(_, { input }, ctx) {
+      try {
+        const res = await ctx.grpc.student.call("createStudent", input);
+        return mapStudent(res.student);
+      } catch (error) {
+        throw toGraphQLError(error, "Cannot create student");
       }
+    },
 
-      const response = await toPromise(grpcClients.enrollmentClient, 'createEnrollment', {
-        student_id: currentStudentId,
-        course_id: Number(courseId)
-      });
-      const enrollment = response.enrollment;
-      return {
-        id: String(enrollment.id),
-        studentId: String(enrollment.student_id),
-        courseId: String(enrollment.course_id),
-        status: enrollment.status
-      };
+    // Tạo enrollment cho bất kỳ student (admin use case)
+    async createEnrollment(_, { input }, ctx) {
+      try {
+        const res = await ctx.grpc.enrollment.call(
+          "createEnrollment",
+          {
+            student_id: input.studentId,
+            course_id:  Number(input.courseId)
+          },
+          { timeoutMs: Number(process.env.GRPC_ENROLLMENT_TIMEOUT_MS || 2500) }
+        );
+        return mapEnrollment(res.enrollment);
+      } catch (error) {
+        throw toGraphQLError(error, "Cannot create enrollment");
+      }
+    },
+
+    // Tạo enrollment cho chính mình (dùng JWT)
+    async createMyEnrollment(_, { courseId }, ctx) {
+      requireAuthenticated(ctx);
+      try {
+        const res = await ctx.grpc.enrollment.call(
+          "createEnrollment",
+          {
+            student_id: ctx.currentStudentId,
+            course_id:  Number(courseId)
+          },
+          { timeoutMs: Number(process.env.GRPC_ENROLLMENT_TIMEOUT_MS || 2500) }
+        );
+        return mapEnrollment(res.enrollment);
+      } catch (error) {
+        throw toGraphQLError(error, "Cannot create my enrollment");
+      }
     }
   },
 
-  Course: {
-    enrolledCount: (parent) => parent.enrolled_count,
-    capacity: (parent) => parent.capacity
-  },
-
+  // ─── Field resolvers cho Enrollment (nested queries) ──────────────────────
   Enrollment: {
-    student: async (parent) => {
-      const response = await toPromise(grpcClients.studentClient, 'getStudent', { id: String(parent.studentId) });
-      return response?.student || null;
+    async student(parent, _args, ctx) {
+      try {
+        const res = await ctx.grpc.student.call("getStudent", { id: String(parent.studentId) });
+        return mapStudent(res.student);
+      } catch {
+        return null;
+      }
     },
-    course: async (parent) => {
-      const response = await toPromise(grpcClients.courseClient, 'getCourse', { id: Number(parent.courseId) });
-      return response?.course || null;
+    async course(parent, _args, ctx) {
+      try {
+        const res = await ctx.grpc.course.call("getCourse", { id: Number(parent.courseId) });
+        return mapCourse(res.course);
+      } catch {
+        return null;
+      }
     }
   }
 };
